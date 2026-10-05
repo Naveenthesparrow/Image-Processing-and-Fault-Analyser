@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import {
   Zap, RotateCcw, Download, AlertTriangle,
   ChevronDown, ToggleLeft, ToggleRight, Info,
-  LayoutDashboard, History, Settings, ArrowLeft, Menu
+  ArrowLeft
 } from 'lucide-react';
 import { UploadZone } from './components/UploadZone';
 import { ProgressSteps, type StepStatus } from './components/ProgressSteps';

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Upload, Image as ImageIcon, AlertCircle, Camera } from 'lucide-react';
+import { Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { MAX_FILE_SIZE } from '../config/settings';
 
 interface UploadZoneProps {
