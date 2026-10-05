@@ -143,16 +143,24 @@ export async function analyzeImage(
     throw new Error('NOT_A_POLE');
   }
 
-  onProgress?.('Sending to Gemini…');
+  onProgress?.('AI is analysing…');
 
   let data: GeminiResponse;
   try {
     data = await callGemini(client, base64, mimeType, hint);
   } catch (firstErr) {
+    const firstMsg = String(firstErr);
+    if (firstMsg.includes('429') || firstMsg.includes('quota')) {
+      throw new Error('FREE_LIMIT_REACHED');
+    }
+    if (firstMsg.includes('VITE_GEMINI_API_KEY') || firstMsg.includes('401') || firstMsg.includes('403')) {
+      throw new Error('INVALID_API_KEY');
+    }
+
     // Retry once with error context
     onProgress?.('Retrying after schema error…');
     try {
-      data = await callGemini(client, base64, mimeType, hint, String(firstErr), false);
+      data = await callGemini(client, base64, mimeType, hint, firstMsg, false);
     } catch (secondErr) {
       // Translate API errors to friendly messages
       const msg = String(secondErr);

@@ -43,10 +43,10 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
           min-h-[320px] rounded-2xl border-2 border-dashed
           transition-all duration-300 group
           ${disabled
-            ? 'opacity-40 cursor-not-allowed border-slate-700 bg-slate-900/40'
+            ? 'opacity-40 cursor-not-allowed border-slate-300 bg-slate-50'
             : dragOver
-              ? 'border-blue-500 bg-blue-950/30 scale-[1.01] shadow-[0_0_40px_-5px_rgba(59,130,246,0.3)]'
-              : 'border-slate-700 bg-slate-900/40 hover:border-blue-600/60 hover:bg-slate-900/60 hover:shadow-[0_0_30px_-5px_rgba(59,130,246,0.15)]'
+              ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-[0_0_40px_-5px_rgba(59,130,246,0.15)]'
+              : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-slate-50 hover:shadow-sm'
           }
         `}
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
@@ -65,8 +65,8 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
           <div className={`
             p-5 rounded-2xl border transition-all duration-300
             ${dragOver
-              ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 scale-110'
-              : 'bg-slate-800/60 border-slate-700/60 text-slate-500 group-hover:text-blue-400 group-hover:border-blue-600/40 group-hover:bg-blue-950/20'
+              ? 'bg-blue-100 border-blue-200 text-blue-600 scale-110'
+              : 'bg-slate-50 border-slate-200 text-slate-400 group-hover:text-blue-500 group-hover:border-blue-200 group-hover:bg-blue-50'
             }
           `}>
             <Upload size={36} aria-hidden="true" />
@@ -74,13 +74,13 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
 
           {/* Text */}
           <div>
-            <p className="text-xl font-bold text-slate-200 mb-1">
+            <p className="text-xl font-bold text-slate-800 mb-1">
               {dragOver ? 'Drop to analyse' : 'Upload pole image'}
             </p>
             <p className="text-sm text-slate-500 leading-relaxed">
               Drag & drop or click to choose a file
             </p>
-            <p className="mt-1.5 text-xs text-slate-600">
+            <p className="mt-1.5 text-xs text-slate-400">
               JPG · PNG · WEBP &nbsp;·&nbsp; max {MAX_FILE_SIZE / 1024 / 1024} MB &nbsp;·&nbsp; RGB images only
             </p>
           </div>
@@ -92,12 +92,12 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
               flex items-center justify-center gap-2 py-3 px-6
               border rounded-xl cursor-pointer transition-all font-semibold text-sm
               ${disabled
-                ? 'opacity-50 cursor-not-allowed border-slate-700 text-slate-500 bg-slate-800'
-                : 'border-blue-600/50 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 hover:border-blue-500 hover:text-blue-200 hover:shadow-md active:scale-95'
+                ? 'opacity-50 cursor-not-allowed border-slate-300 text-slate-500 bg-slate-100'
+                : 'border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:scale-95'
               }
             `}
           >
-            <ImageIcon size={18} className="" aria-hidden="true" />
+            <ImageIcon size={18} className="text-slate-500" aria-hidden="true" />
             <span>Choose image</span>
             <input
               id="gallery-input"
@@ -115,7 +115,7 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
       {error && (
         <div
           role="alert"
-          className="mt-3 flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/50 border border-red-800/50 text-red-400 text-sm"
+          className="mt-3 flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm"
         >
           <AlertCircle size={16} aria-hidden="true" />
           <span>{error}</span>

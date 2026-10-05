@@ -21,8 +21,8 @@
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: #020617; /* slate-950 */
-    color: #f8fafc;
+    background-color: #f8fafc; /* slate-50 */
+    color: #0f172a; /* slate-900 */
     -webkit-font-smoothing: antialiased;
   }
 

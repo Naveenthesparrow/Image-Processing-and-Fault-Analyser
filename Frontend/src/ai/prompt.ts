@@ -64,7 +64,7 @@ Rules:
 - Provide EXACTLY 5 entries, one per component, in the order: insulator, sag, structure, vegetation, conductor.
 - visible=false → set issue_type=null, confidence=0, box_2d=null.
 - If visible, choose the SINGLE WORST issue_type from the allowed list for THAT component only.
-- box_2d: tight bounding box [ymin, xmin, ymax, xmax] normalised 0–1000. Only include when the component is clearly located.
+- box_2d: tight bounding box [ymin, xmin, ymax, xmax] normalised 0–1000. If there is a defect, draw the box TIGHTLY around the specific defect itself (e.g. the exact patch of rust, the specific broken piece). If healthy, draw it around the component. Only include when clearly located.
 - confidence 0–1: use lower values when the component is small, blurry, partially occluded, or far away.
 - evidence: one short sentence of what you actually see that led to this label.
 - SAG NOTE: sag from a single photo is very hard to judge. Only report sag if the full wire span between two poles is clearly visible and the droop is unambiguous. Otherwise, set visible=false.
@@ -127,7 +127,7 @@ Instructions:
 - Output exactly 5 entries in this order: insulator, sag, structure, vegetation, conductor.
 - Not clearly visible → visible=false, issue_type=null, confidence=0, box_2d=null.
 - Visible → single worst condition label from the list for THAT component only.
-- box_2d: [ymin, xmin, ymax, xmax], values 0–1000. Be precise.
+- box_2d: [ymin, xmin, ymax, xmax], values 0–1000. Be precise. The box MUST tightly surround the specific defect (e.g. the exact rusty spot) if one is present, or the component if healthy.
 - confidence: your certainty 0–1. Be conservative for small or distant objects.
 - evidence: exactly one sentence describing the physical feature that determined your label.
 - Wire sag: only assess if the complete span between poles is visible. Otherwise: visible=false.

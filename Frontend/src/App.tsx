@@ -4,10 +4,10 @@ import {
   Info, ArrowLeft, ScanLine,
 } from 'lucide-react';
 import { UploadZone } from './components/UploadZone';
+import { SummaryPanel } from './components/SummaryPanel';
 import { ProgressSteps, type StepStatus } from './components/ProgressSteps';
 import { VerdictBanner } from './components/VerdictBanner';
 import { ImageViewer } from './components/ImageViewer';
-import { ComponentCard } from './components/ComponentCard';
 import { analyzeImage } from './ai/gemini';
 import { buildReport, type Report, type ImageQualityInfo } from './logic/rules';
 import { validateImageFile, computeBlurScore, getImageDimensions } from './utils/image';
@@ -34,16 +34,16 @@ const INITIAL_STEPS: ProgressStep[] = [
 
 const ERROR_MESSAGES: Record<string, { title: string; tip: string }> = {
   FREE_LIMIT_REACHED: {
-    title: 'Free rate limit reached',
-    tip: 'Wait about 1 minute and try again. Gemini free tier allows ~15 requests per minute.',
+    title: 'Server rate limit reached',
+    tip: 'Wait about 1 minute and try again. The AI server allows ~15 requests per minute, but also enforces a strict daily limit. If this persists, your daily quota may be exhausted.',
   },
   INVALID_API_KEY: {
     title: 'Invalid API key',
-    tip: 'Check your VITE_GEMINI_API_KEY in the .env file. Make sure it is valid and not expired.',
+    tip: 'Check your API key in the server config. Make sure it is valid and not expired.',
   },
   ANALYSIS_FAILED: {
     title: 'Analysis failed',
-    tip: 'Gemini returned an unexpected response. Please try again. If this persists, the image may be unsupported.',
+    tip: 'The AI server returned an unexpected response. Please try again. If this persists, the image may be unsupported.',
   },
   NOT_A_POLE: {
     title: 'Image not recognized',
@@ -60,8 +60,10 @@ export default function App() {
   const [imageUrl, setImageUrl]         = useState<string | null>(null);
   const [error, setError]               = useState<{ title: string; tip: string } | null>(null);
   const [geminiOutput, setGeminiOutput] = useState<any>(null);
+  const [activeComponent, setActiveComponent] = useState<string | null>(null);
 
   const fileRef = useRef<File | null>(null);
+  const viewerRef = useRef<{ downloadImage: () => void }>(null);
 
   // ── Step helpers ─────────────────────────────────────────────────────────
 
@@ -154,6 +156,7 @@ export default function App() {
     setReport(null);
     setError(null);
     setGeminiOutput(null);
+    setActiveComponent(null);
     resetSteps();
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     setImageUrl(null);
@@ -163,14 +166,14 @@ export default function App() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col selection:bg-blue-500/30 selection:text-blue-200">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col selection:bg-blue-200 selection:text-blue-900">
       {/* Top Navbar */}
-      <nav className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 sticky top-0">
+      <nav className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10 sticky top-0">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-blue-600/20 border border-blue-500/30">
-            <Zap size={18} className="text-blue-400" aria-hidden="true" />
+          <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-100">
+            <Zap size={18} className="text-blue-600" aria-hidden="true" />
           </div>
-          <span className="font-black text-white text-lg tracking-tight">PowerPole <span className="text-blue-400">Pro</span></span>
+          <span className="font-black text-slate-900 text-lg tracking-tight">PowerPole <span className="text-blue-600">Pro</span></span>
         </div>
       </nav>
 
@@ -184,25 +187,30 @@ export default function App() {
               {appState !== 'idle' && (
                 <button
                   onClick={resetApp}
-                  className="flex items-center gap-2 text-slate-400 hover:text-white mb-5 font-semibold text-sm transition-all w-fit cursor-pointer bg-slate-800/60 border border-slate-700 hover:border-slate-500 px-4 py-2 rounded-xl hover:bg-slate-800"
+                  className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-5 font-semibold text-sm transition-all w-fit cursor-pointer bg-white border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-xl hover:bg-slate-50"
                 >
                   <ArrowLeft size={15} aria-hidden="true" /> Clear &amp; Start Over
                 </button>
               )}
               <div className="flex items-center gap-3 mb-2">
-                <ScanLine size={28} className="text-blue-400" />
-                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                <ScanLine size={28} className="text-blue-600" />
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
                   Power Pole Analysis
                 </h1>
               </div>
-              <p className="text-base font-medium text-slate-400 max-w-2xl leading-relaxed ml-10">
+              <p className="text-base font-medium text-slate-500 max-w-2xl leading-relaxed ml-10">
                 Upload a power pole image — the AI will detect components, identify defects, and generate a safety report instantly.
               </p>
             </header>
 
             {/* ── IDLE / UPLOAD ── */}
             {appState === 'idle' && (
-              <UploadZone onFile={handleFile} />
+              <div className="flex flex-col items-center">
+                <UploadZone onFile={handleFile} />
+                <p className="mt-4 text-[11px] text-slate-400 font-medium uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                  Note: AI Server limits usage to ~15 analyses per minute
+                </p>
+              </div>
             )}
 
             {/* ── LOADING ── */}
@@ -210,17 +218,17 @@ export default function App() {
               <div className="flex flex-col md:flex-row items-center justify-center gap-12 lg:gap-20 py-16 w-full max-w-4xl mx-auto animate-fadeIn">
                 {/* Left side: Image Scanning */}
                 {imageUrl && (
-                  <div className="relative w-64 h-64 md:w-80 md:h-80 shrink-0 rounded-3xl overflow-hidden shadow-[0_10px_60px_-10px_rgba(59,130,246,0.4)] border border-slate-700">
+                  <div className="relative w-64 h-64 md:w-80 md:h-80 shrink-0 rounded-3xl overflow-hidden shadow-[0_10px_60px_-10px_rgba(59,130,246,0.3)] border border-slate-200">
                     <img
                       src={imageUrl}
                       alt="Analyzing power pole image"
-                      className="w-full h-full object-cover opacity-60"
+                      className="w-full h-full object-cover opacity-80 grayscale"
                     />
                     {/* Scanning Laser Line */}
-                    <div className="absolute inset-x-0 h-[2px] bg-blue-400 shadow-[0_0_20px_6px_rgba(59,130,246,0.9)] animate-scan z-10" aria-hidden="true" />
-                    <div className="absolute inset-0 bg-blue-600/10 mix-blend-overlay animate-pulse" aria-hidden="true" />
+                    <div className="absolute inset-x-0 h-[2px] bg-blue-500 shadow-[0_0_20px_6px_rgba(59,130,246,0.8)] animate-scan z-10" aria-hidden="true" />
+                    <div className="absolute inset-0 bg-blue-500/10 mix-blend-overlay animate-pulse" aria-hidden="true" />
                     {/* Grid overlay */}
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" aria-hidden="true" />
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" aria-hidden="true" />
                   </div>
                 )}
 
@@ -236,13 +244,13 @@ export default function App() {
               <div className="flex flex-col md:flex-row items-center justify-center gap-12 lg:gap-20 py-16 w-full max-w-4xl mx-auto animate-fadeIn">
                 {/* Left side: Image */}
                 {imageUrl && (
-                  <div className="relative w-64 h-64 md:w-80 md:h-80 shrink-0 rounded-3xl overflow-hidden shadow-lg border border-red-900/50">
+                  <div className="relative w-64 h-64 md:w-80 md:h-80 shrink-0 rounded-3xl overflow-hidden shadow-lg border border-red-200">
                     <img
                       src={imageUrl}
                       alt="Uploaded image that failed analysis"
-                      className="w-full h-full object-cover grayscale opacity-40"
+                      className="w-full h-full object-cover grayscale opacity-50"
                     />
-                    <div className="absolute inset-0 bg-red-900/20" aria-hidden="true" />
+                    <div className="absolute inset-0 bg-red-500/10" aria-hidden="true" />
                   </div>
                 )}
 
@@ -252,13 +260,13 @@ export default function App() {
 
                   <div
                     role="alert"
-                    className="w-full px-5 py-4 rounded-2xl bg-red-950/60 border border-red-800/60 shadow-sm"
+                    className="w-full px-5 py-4 rounded-2xl bg-red-50 border border-red-200 shadow-sm"
                   >
                     <div className="flex items-start gap-3">
-                      <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                      <AlertTriangle size={20} className="text-red-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
                       <div>
-                        <p className="font-bold text-red-300">{error.title}</p>
-                        <p className="mt-1 text-sm text-red-400/90">{error.tip}</p>
+                        <p className="font-bold text-red-700">{error.title}</p>
+                        <p className="mt-1 text-sm text-red-600/90">{error.tip}</p>
                       </div>
                     </div>
                   </div>
@@ -266,7 +274,7 @@ export default function App() {
                   <button
                     id="try-again-btn"
                     onClick={resetApp}
-                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:border-slate-600 text-slate-200 font-bold text-sm shadow-sm transition-all"
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 font-bold text-sm shadow-sm transition-all"
                   >
                     <RotateCcw size={16} aria-hidden="true" />
                     Try another image
@@ -283,13 +291,14 @@ export default function App() {
                   verdict={report.verdict}
                   overallSeverity={report.overallSeverity}
                   severityLabel={labelOf(report.overallSeverity).label}
+                  components={report.components}
                 />
 
                 {/* Quality warnings */}
                 {(report.blurWarning || report.lowResWarning) && (
                   <div
                     role="alert"
-                    className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-950/50 border border-amber-700/40 text-amber-300 text-sm"
+                    className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm"
                   >
                     <Info size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
@@ -304,53 +313,49 @@ export default function App() {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
                       <ImageViewer
+                        ref={viewerRef}
                         imageUrl={imageUrl}
                         components={report.components}
+                        activeComponent={activeComponent}
                       />
                     </div>
 
                     {/* Summary sidebar */}
-                    <div className="flex flex-col gap-4">
-                      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 shadow-sm p-5">
-                        <h3 className="font-bold text-slate-300 text-xs mb-3 uppercase tracking-widest">AI Summary</h3>
-                        <div className="text-sm text-slate-400 leading-relaxed whitespace-pre-line">
-                          {report.summary}
-                        </div>
-                      </div>
+                    <div className="flex flex-col gap-4 h-full">
+                      <SummaryPanel 
+                        components={report.components}
+                        activeComponent={activeComponent}
+                        onComponentClick={(comp) => setActiveComponent(prev => prev === comp ? null : comp)}
+                      />
                     </div>
                   </div>
                 )}
-
-                {/* Component cards */}
-                <section aria-label="Component inspection results">
-                  <h2 className="text-lg font-bold text-slate-200 mb-4">Component Findings</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                    {[...report.components]
-                      .sort((a, b) => {
-                        if (a.status === 'NOT_VISIBLE' && b.status !== 'NOT_VISIBLE') return 1;
-                        if (a.status !== 'NOT_VISIBLE' && b.status === 'NOT_VISIBLE') return -1;
-                        return 0;
-                      })
-                      .map((comp) => (
-                        <ComponentCard key={comp.component} result={comp} />
-                      ))}
-                  </div>
-                </section>
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-3 pt-2 pb-4">
                   <button
                     id="analyse-another-btn"
                     onClick={resetApp}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:border-slate-600 text-slate-200 shadow-sm font-medium text-sm transition-all"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 shadow-sm font-medium text-sm transition-all"
                   >
                     <RotateCcw size={16} aria-hidden="true" />
                     Analyse another
                   </button>
+                  
+                  <div className="flex-1" />
+
+                  <button
+                    onClick={() => viewerRef.current?.downloadImage()}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 shadow-sm text-slate-700 font-semibold text-sm transition-all"
+                  >
+                    <Download size={16} aria-hidden="true" />
+                    Download picture with marked defect
+                  </button>
+
                   <button
                     id="download-result-btn"
                     onClick={downloadResult}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 shadow-md text-white font-semibold text-sm transition-all"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm text-white font-semibold text-sm transition-all"
                   >
                     <Download size={16} aria-hidden="true" />
                     Download report (JSON)
@@ -360,10 +365,10 @@ export default function App() {
             )}
 
             {/* Footer */}
-            <footer className="mt-16 pt-8 border-t border-slate-800 text-center">
+            <footer className="mt-16 pt-8 border-t border-slate-200 text-center">
               <div
                 role="note"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-400 font-medium text-xs shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-medium text-xs shadow-sm"
               >
                 <AlertTriangle size={12} aria-hidden="true" />
                 AI-assisted result. Critical findings should be verified by a qualified inspector.
