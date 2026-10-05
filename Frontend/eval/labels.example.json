@@ -1,0 +1,36 @@
+[
+  {
+    "image": "images/good_pole.jpg",
+    "expected_image_type": "rgb",
+    "expected_verdict": "GOOD",
+    "expected_components": {
+      "insulator": "no_crack",
+      "structure": "stable",
+      "conductor": "excellent"
+    },
+    "notes": "Clean pole, all healthy"
+  },
+  {
+    "image": "images/cracked_insulator.jpg",
+    "expected_image_type": "rgb",
+    "expected_verdict": "DEFECT_FOUND",
+    "expected_components": {
+      "insulator": "major_crack"
+    },
+    "notes": "Clearly cracked insulator disc"
+  },
+  {
+    "image": "images/thermal_hot.jpg",
+    "expected_image_type": "thermal",
+    "expected_verdict": "DEFECT_FOUND",
+    "expected_thermal_min_c": 70,
+    "notes": "Thermal image with printed max temp > 70°C"
+  },
+  {
+    "image": "images/thermal_cool.jpg",
+    "expected_image_type": "thermal",
+    "expected_verdict": "GOOD",
+    "expected_thermal_max_c": 69,
+    "notes": "Thermal image, temperature below threshold"
+  }
+]

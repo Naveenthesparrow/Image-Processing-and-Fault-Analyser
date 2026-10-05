@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+
+# Environment variables (NEVER commit API keys)
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Eval images (add your own)
+eval/images/
+eval/labels.json
