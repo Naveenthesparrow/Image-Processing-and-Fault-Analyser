@@ -49,6 +49,10 @@ const ERROR_MESSAGES: Record<string, { title: string; tip: string }> = {
     title: 'Image not recognized',
     tip: 'The AI did not recognize this as a valid power pole image. Please upload a clear RGB photo of a power pole.',
   },
+  THERMAL_NOT_SUPPORTED: {
+    title: 'Thermal images unsupported',
+    tip: 'The AI detected a thermal or false-color image. Please upload standard visible-light (RGB) photographs only.',
+  },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────

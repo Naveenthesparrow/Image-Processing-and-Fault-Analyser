@@ -2,7 +2,7 @@ import {
   GoogleGenAI,
   type GenerateContentResponse,
 } from '@google/genai';
-import { GEMINI_API_KEY, GEMINI_MODEL, API_TIMEOUT_MS, MAX_IMAGE_SIDE, JPEG_QUALITY, THERMAL_DOUBLECHECK_MARGIN } from '../config/settings';
+import { GEMINI_API_KEY, GEMINI_MODEL, API_TIMEOUT_MS, MAX_IMAGE_SIDE, JPEG_QUALITY } from '../config/settings';
 import { GEMINI_RESPONSE_SCHEMA, GeminiResponseSchema, type GeminiResponse } from './schema';
 import { buildPrompt, buildSecondPrompt } from './prompt';
 import { resizeImage, imageToBase64 } from '../utils/image';
@@ -174,6 +174,10 @@ export async function analyzeImage(
     }
   }
 
+  if (data.image_type === 'thermal') {
+    throw new Error('THERMAL_NOT_SUPPORTED');
+  }
+
   if (data.image_type === 'invalid' || data.is_power_pole === false) {
     throw new Error('NOT_A_POLE');
   }
@@ -192,20 +196,10 @@ export async function analyzeImage(
 
   let disagreement = false;
   
-  if (data.image_type === 'thermal' && data2.image_type === 'thermal') {
-    const t1 = data.thermal.max_temp_c;
-    const t2 = data2.thermal.max_temp_c;
-    if (t1 != null && t2 != null) {
-      if (Math.abs(t1 - t2) > THERMAL_DOUBLECHECK_MARGIN) {
-        disagreement = true;
-      }
-    }
-  } else {
-    disagreement = data.components.some((c, i) => {
-      const c2 = data2.components[i];
-      return c.issue_type !== c2.issue_type && c.visible && c2.visible;
-    });
-  }
+  disagreement = data.components.some((c, i) => {
+    const c2 = data2.components[i];
+    return c.issue_type !== c2.issue_type && c.visible && c2.visible;
+  });
 
   return { data, doubleCheckDisagreement: disagreement };
 }
