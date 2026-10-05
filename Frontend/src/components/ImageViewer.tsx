@@ -16,9 +16,6 @@ interface Tooltip {
 interface ImageViewerProps {
   imageUrl: string;
   components: ComponentResult[];
-  thermalHotspot?: [number, number, number, number] | null;
-  thermalTempC?: number | null;
-  imageType: 'rgb' | 'thermal' | 'invalid';
 }
 
 const SEVERITY_COLOURS: Record<number, string> = {
@@ -30,13 +27,7 @@ const SEVERITY_COLOURS: Record<number, string> = {
   5: '#ef4444',
 };
 
-export function ImageViewer({
-  imageUrl,
-  components,
-  thermalHotspot,
-  thermalTempC,
-  imageType,
-}: ImageViewerProps) {
+export function ImageViewer({ imageUrl, components }: ImageViewerProps) {
   const canvasRef     = useRef<HTMLCanvasElement>(null);
   const imgRef        = useRef<HTMLImageElement>(null);
   const containerRef  = useRef<HTMLDivElement>(null);
@@ -60,25 +51,14 @@ export function ImageViewer({
 
     if (!showBoxes) return;
 
-    // Draw RGB component boxes
-    if (imageType === 'rgb') {
-      for (const comp of components) {
-        if (!comp.box2d || comp.status === 'NOT_VISIBLE') continue;
-        const box = normToPixelBox(comp.box2d, W, H);
-        if (!box) continue;
-        const colour = SEVERITY_COLOURS[comp.severity] ?? SEVERITY_COLOURS[0];
-        drawBox(ctx, box, colour, comp.component, comp.severity);
-      }
+    for (const comp of components) {
+      if (!comp.box2d || comp.status === 'NOT_VISIBLE') continue;
+      const box = normToPixelBox(comp.box2d, W, H);
+      if (!box) continue;
+      const colour = SEVERITY_COLOURS[comp.severity] ?? SEVERITY_COLOURS[0];
+      drawBox(ctx, box, colour, comp.component, comp.severity);
     }
-
-    // Draw thermal hotspot
-    if (imageType === 'thermal' && thermalHotspot) {
-      const box = normToPixelBox(thermalHotspot, W, H);
-      if (box) {
-        drawHotspot(ctx, box, thermalTempC);
-      }
-    }
-  }, [components, showBoxes, imgLoaded, imageType, thermalHotspot, thermalTempC]);
+  }, [components, showBoxes, imgLoaded]);
 
   useEffect(() => {
     drawCanvas();
@@ -127,7 +107,7 @@ export function ImageViewer({
   return (
     <div className="flex flex-col gap-3">
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           id="toggle-boxes-btn"
           onClick={() => setShowBoxes((b) => !b)}
@@ -135,8 +115,8 @@ export function ImageViewer({
             flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm
             border transition-all duration-200
             ${showBoxes
-              ? 'bg-blue-50 border-blue-200 text-blue-700'
-              : 'bg-white border-slate-300 text-slate-600 hover:border-slate-400'
+              ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+              : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
             }
           `}
           aria-pressed={showBoxes}
@@ -149,7 +129,7 @@ export function ImageViewer({
         <button
           id="zoom-in-btn"
           onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
-          className="p-2 rounded-xl bg-white border border-slate-300 text-slate-600 shadow-sm hover:border-slate-400 transition-all"
+          className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 shadow-sm hover:border-slate-600 transition-all"
           aria-label="Zoom in"
         >
           <ZoomIn size={16} aria-hidden="true" />
@@ -157,7 +137,7 @@ export function ImageViewer({
         <button
           id="zoom-out-btn"
           onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
-          className="p-2 rounded-xl bg-white border border-slate-300 text-slate-600 shadow-sm hover:border-slate-400 transition-all"
+          className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 shadow-sm hover:border-slate-600 transition-all"
           aria-label="Zoom out"
         >
           <ZoomOut size={16} aria-hidden="true" />
@@ -166,28 +146,18 @@ export function ImageViewer({
           <button
             id="zoom-reset-btn"
             onClick={() => setZoom(1)}
-            className="px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-600 font-medium shadow-sm text-xs hover:border-slate-400 transition-all"
+            className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-medium shadow-sm text-xs hover:border-slate-600 transition-all"
             aria-label="Reset zoom"
           >
             Reset
           </button>
-        )}
-
-        {/* Thermal badge */}
-        {imageType === 'thermal' && thermalTempC !== null && thermalTempC !== undefined && (
-          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 shadow-sm">
-            <span className="text-orange-700 font-bold text-lg" aria-label={`Maximum temperature ${thermalTempC} degrees Celsius`}>
-              {thermalTempC.toFixed(1)} °C
-            </span>
-            <span className="text-orange-600 text-xs font-semibold">max temp</span>
-          </div>
         )}
       </div>
 
       {/* Image + canvas overlay */}
       <div
         ref={containerRef}
-        className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-300 shadow-inner cursor-crosshair"
+        className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-inner cursor-crosshair"
         onClick={() => setTooltip(null)}
         style={{ maxHeight: '520px' }}
       >
@@ -222,9 +192,9 @@ export function ImageViewer({
             className="absolute z-10 pointer-events-none"
             style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
           >
-            <div className="bg-white border border-slate-300 rounded-xl p-3 shadow-xl min-w-[180px] max-w-[260px]">
-              <p className="font-bold text-slate-900 capitalize text-sm">{tooltip.label}</p>
-              <p className="text-xs font-semibold text-slate-600 mt-0.5 capitalize">{tooltip.issue.replace(/_/g, ' ')}</p>
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl min-w-[180px] max-w-[260px]">
+              <p className="font-bold text-white capitalize text-sm">{tooltip.label}</p>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5 capitalize">{tooltip.issue.replace(/_/g, ' ')}</p>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed italic">"{tooltip.evidence}"</p>
               <div className={`mt-2 text-xs font-bold ${labelOf(tooltip.severity).text}`}>
                 Severity {tooltip.severity} — {labelOf(tooltip.severity).label}
@@ -275,37 +245,4 @@ function drawBox(
   ctx.fillRect(lx, ly - fontSize - 2, tw + 8, fontSize + 6);
   ctx.fillStyle = '#fff';
   ctx.fillText(text, lx + 4, ly);
-}
-
-function drawHotspot(
-  ctx: CanvasRenderingContext2D,
-  box: PixelBox,
-  tempC: number | null | undefined
-) {
-  // Pulsing red gradient
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(box.width, box.height) / 2);
-  grad.addColorStop(0, 'rgba(239,68,68,0.4)');
-  grad.addColorStop(1, 'rgba(239,68,68,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(box.x, box.y, box.width, box.height);
-
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth   = 2;
-  ctx.setLineDash([6, 3]);
-  ctx.strokeRect(box.x, box.y, box.width, box.height);
-  ctx.setLineDash([]);
-
-  if (tempC != null) {
-    const label = `${tempC.toFixed(1)} °C`;
-    ctx.font     = 'bold 13px Inter, sans-serif';
-    const tw     = ctx.measureText(label).width;
-    ctx.fillStyle = 'rgba(239,68,68,0.85)';
-    ctx.beginPath();
-    ctx.roundRect(cx - tw / 2 - 6, cy - 13, tw + 12, 22, 6);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.fillText(label, cx - tw / 2, cy + 3);
-  }
 }

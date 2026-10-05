@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Image as ImageIcon, AlertCircle, Upload } from 'lucide-react';
 import { MAX_FILE_SIZE } from '../config/settings';
 
 interface UploadZoneProps {
@@ -32,7 +32,6 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
   const onInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
-    // Reset input so same file can be re-selected
     e.target.value = '';
   }, [handleFile]);
 
@@ -41,13 +40,13 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
       <div
         className={`
           relative flex flex-col items-center w-full
-          min-h-[280px] rounded-2xl border-2 border-dashed
+          min-h-[320px] rounded-2xl border-2 border-dashed
           transition-all duration-300 group
           ${disabled
-            ? 'opacity-50 cursor-not-allowed border-slate-300 bg-slate-50'
+            ? 'opacity-40 cursor-not-allowed border-slate-700 bg-slate-900/40'
             : dragOver
-              ? 'border-electric-blue bg-blue-50 scale-[1.01]'
-              : 'border-slate-400 bg-white shadow-sm hover:border-blue-500 hover:shadow-md'
+              ? 'border-blue-500 bg-blue-950/30 scale-[1.01] shadow-[0_0_40px_-5px_rgba(59,130,246,0.3)]'
+              : 'border-slate-700 bg-slate-900/40 hover:border-blue-600/60 hover:bg-slate-900/60 hover:shadow-[0_0_30px_-5px_rgba(59,130,246,0.15)]'
           }
         `}
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
@@ -55,34 +54,60 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
         onDrop={disabled ? undefined : onDrop}
         aria-label="Upload power pole image"
       >
-        <div className="flex flex-col items-center gap-5 px-8 py-8 text-center w-full">
+        {/* Grid bg pattern */}
+        <div
+          className="absolute inset-0 rounded-2xl bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"
+          aria-hidden="true"
+        />
+
+        <div className="relative flex flex-col items-center gap-6 px-8 py-12 text-center w-full">
+          {/* Icon */}
+          <div className={`
+            p-5 rounded-2xl border transition-all duration-300
+            ${dragOver
+              ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 scale-110'
+              : 'bg-slate-800/60 border-slate-700/60 text-slate-500 group-hover:text-blue-400 group-hover:border-blue-600/40 group-hover:bg-blue-950/20'
+            }
+          `}>
+            <Upload size={36} aria-hidden="true" />
+          </div>
+
           {/* Text */}
           <div>
-            <p className="text-xl font-semibold text-slate-900 mb-1">
+            <p className="text-xl font-bold text-slate-200 mb-1">
               {dragOver ? 'Drop to analyse' : 'Upload pole image'}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              JPG · PNG · WEBP &nbsp;·&nbsp; max {MAX_FILE_SIZE / 1024 / 1024} MB &nbsp;·&nbsp; min 320 px
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Drag & drop or click to choose a file
+            </p>
+            <p className="mt-1.5 text-xs text-slate-600">
+              JPG · PNG · WEBP &nbsp;·&nbsp; max {MAX_FILE_SIZE / 1024 / 1024} MB &nbsp;·&nbsp; RGB images only
             </p>
           </div>
 
-          <div className="flex flex-col gap-4 w-full max-w-[240px] mt-4">
-            <label
-              htmlFor="gallery-input"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-slate-300 rounded-xl bg-white hover:bg-slate-50 hover:border-blue-400 cursor-pointer transition-all shadow-sm"
-            >
-              <ImageIcon size={20} className="text-slate-500" aria-hidden="true" />
-              <span className="font-semibold text-slate-800 text-sm">Choose image</span>
-              <input
-                id="gallery-input"
-                type="file"
-                accept={accept}
-                className="sr-only"
-                onChange={disabled ? undefined : onInputChange}
-                disabled={disabled}
-              />
-            </label>
-          </div>
+          {/* Button */}
+          <label
+            htmlFor="gallery-input"
+            className={`
+              flex items-center justify-center gap-2 py-3 px-6
+              border rounded-xl cursor-pointer transition-all font-semibold text-sm
+              ${disabled
+                ? 'opacity-50 cursor-not-allowed border-slate-700 text-slate-500 bg-slate-800'
+                : 'border-blue-600/50 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 hover:border-blue-500 hover:text-blue-200 hover:shadow-md active:scale-95'
+              }
+            `}
+          >
+            <ImageIcon size={18} className="" aria-hidden="true" />
+            <span>Choose image</span>
+            <input
+              id="gallery-input"
+              type="file"
+              accept={accept}
+              className="sr-only"
+              onChange={disabled ? undefined : onInputChange}
+              disabled={disabled}
+            />
+          </label>
         </div>
       </div>
 
@@ -90,7 +115,7 @@ export function UploadZone({ onFile, disabled }: UploadZoneProps) {
       {error && (
         <div
           role="alert"
-          className="mt-3 flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm"
+          className="mt-3 flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/50 border border-red-800/50 text-red-400 text-sm"
         >
           <AlertCircle size={16} aria-hidden="true" />
           <span>{error}</span>

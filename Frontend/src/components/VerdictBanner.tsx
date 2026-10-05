@@ -4,7 +4,6 @@ import {
   HelpCircle,
   XCircle,
   Eye,
-  Thermometer,
   Zap,
 } from 'lucide-react';
 import type { Verdict } from '../logic/rules';
@@ -13,75 +12,75 @@ interface VerdictConfig {
   icon: React.ReactNode;
   label: string;
   sublabel: string;
-  gradient: string;
+  bg: string;
   border: string;
-  glow: string;
   textClass: string;
+  accent: string;
 }
 
 const VERDICT_CONFIG: Record<Verdict, VerdictConfig> = {
   GOOD: {
     icon: <CheckCircle2 size={36} aria-hidden="true" />,
-    label: 'GOOD',
+    label: 'ALL CLEAR',
     sublabel: 'No defects detected',
-    gradient: 'from-green-50 to-white',
-    border: 'border-green-200',
-    glow: 'shadow-sm',
-    textClass: 'text-green-700',
+    bg: 'bg-emerald-950/60',
+    border: 'border-emerald-700/40',
+    textClass: 'text-emerald-400',
+    accent: 'from-emerald-500/10 to-transparent',
   },
   DEFECT_FOUND: {
     icon: <AlertTriangle size={36} aria-hidden="true" />,
     label: 'DEFECT FOUND',
     sublabel: 'Inspection action required',
-    gradient: 'from-orange-50 to-white',
-    border: 'border-orange-200',
-    glow: 'shadow-sm',
-    textClass: 'text-orange-700',
+    bg: 'bg-red-950/60',
+    border: 'border-red-700/40',
+    textClass: 'text-red-400',
+    accent: 'from-red-500/10 to-transparent',
   },
   GOOD_MONITOR: {
     icon: <CheckCircle2 size={36} aria-hidden="true" />,
-    label: 'GOOD (MONITOR)',
+    label: 'GOOD — MONITOR',
     sublabel: 'No defects, minor items to watch',
-    gradient: 'from-teal-50 to-white',
-    border: 'border-teal-200',
-    glow: 'shadow-sm',
-    textClass: 'text-teal-700',
+    bg: 'bg-teal-950/60',
+    border: 'border-teal-700/40',
+    textClass: 'text-teal-400',
+    accent: 'from-teal-500/10 to-transparent',
   },
   INCONCLUSIVE: {
     icon: <HelpCircle size={36} aria-hidden="true" />,
     label: 'INCONCLUSIVE',
     sublabel: 'Limited visibility — not enough data for a clear verdict',
-    gradient: 'from-slate-100 to-white',
-    border: 'border-slate-300',
-    glow: 'shadow-sm',
-    textClass: 'text-slate-700',
+    bg: 'bg-slate-800/60',
+    border: 'border-slate-600/40',
+    textClass: 'text-slate-300',
+    accent: 'from-slate-400/10 to-transparent',
   },
   INVALID: {
     icon: <XCircle size={36} aria-hidden="true" />,
     label: 'INVALID IMAGE',
     sublabel: 'Not a power pole or unusable image',
-    gradient: 'from-red-50 to-white',
-    border: 'border-red-200',
-    glow: 'shadow-sm',
-    textClass: 'text-red-700',
+    bg: 'bg-slate-900/60',
+    border: 'border-slate-700/40',
+    textClass: 'text-slate-400',
+    accent: 'from-slate-500/10 to-transparent',
   },
   NEEDS_REVIEW: {
     icon: <Eye size={36} aria-hidden="true" />,
     label: 'NEEDS REVIEW',
     sublabel: 'Human verification recommended',
-    gradient: 'from-purple-50 to-white',
-    border: 'border-purple-200',
-    glow: 'shadow-sm',
-    textClass: 'text-purple-700',
+    bg: 'bg-purple-950/60',
+    border: 'border-purple-700/40',
+    textClass: 'text-purple-400',
+    accent: 'from-purple-500/10 to-transparent',
   },
   NEEDS_INPUT: {
-    icon: <Thermometer size={36} aria-hidden="true" />,
+    icon: <HelpCircle size={36} aria-hidden="true" />,
     label: 'NEEDS INPUT',
-    sublabel: 'Enter thermal temperature to complete analysis',
-    gradient: 'from-amber-50 to-white',
-    border: 'border-amber-200',
-    glow: 'shadow-sm',
-    textClass: 'text-amber-700',
+    sublabel: 'Additional information required',
+    bg: 'bg-amber-950/60',
+    border: 'border-amber-700/40',
+    textClass: 'text-amber-400',
+    accent: 'from-amber-500/10 to-transparent',
   },
 };
 
@@ -89,16 +88,12 @@ interface VerdictBannerProps {
   verdict: Verdict;
   overallSeverity: number;
   severityLabel?: string;
-  imageType: 'rgb' | 'thermal' | 'invalid';
-  isEstimated?: boolean;
 }
 
 export function VerdictBanner({
   verdict,
   overallSeverity,
   severityLabel,
-  imageType,
-  isEstimated,
 }: VerdictBannerProps) {
   const cfg = VERDICT_CONFIG[verdict];
 
@@ -109,19 +104,21 @@ export function VerdictBanner({
       aria-label={`Verdict: ${cfg.label}`}
       className={`
         relative overflow-hidden rounded-2xl border px-6 py-6
-        bg-gradient-to-br ${cfg.gradient} ${cfg.border}
-        shadow-2xl ${cfg.glow}
-        transition-all duration-700
+        ${cfg.bg} ${cfg.border}
+        shadow-xl transition-all duration-700
       `}
     >
-      {/* Background pulse for defects */}
+      {/* Gradient accent */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${cfg.accent} pointer-events-none`} aria-hidden="true" />
+
+      {/* Pulse ring for high severity */}
       {verdict === 'DEFECT_FOUND' && overallSeverity >= 4 && (
-        <div className="absolute inset-0 rounded-2xl border border-red-500/30 animate-pulse" aria-hidden="true" />
+        <div className="absolute inset-0 rounded-2xl border-2 border-red-500/30 animate-pulse" aria-hidden="true" />
       )}
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* Icon */}
-        <div className={`p-3 rounded-xl bg-white shadow-sm border border-slate-100 ${cfg.textClass}`}>
+        <div className={`p-3 rounded-xl bg-slate-900/60 border border-slate-700/60 ${cfg.textClass} flex-shrink-0`}>
           {cfg.icon}
         </div>
 
@@ -131,24 +128,17 @@ export function VerdictBanner({
             <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${cfg.textClass}`}>
               {cfg.label}
             </h2>
-            {isEstimated && (
-              <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-200 text-amber-800 text-xs font-semibold shadow-sm">
-                Estimated
-              </span>
-            )}
-            {imageType !== 'invalid' && (
-              <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-sm">
-                <Zap size={10} aria-hidden="true" />
-                {imageType === 'thermal' ? 'Thermal' : 'RGB'}
-              </span>
-            )}
+            <span className="px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-400 text-xs font-semibold flex items-center gap-1">
+              <Zap size={10} aria-hidden="true" />
+              RGB
+            </span>
           </div>
-          <p className="mt-1 text-sm font-medium text-slate-600">{cfg.sublabel}</p>
+          <p className="mt-1 text-sm font-medium text-slate-400">{cfg.sublabel}</p>
         </div>
 
         {/* Severity badge */}
         {verdict === 'DEFECT_FOUND' && severityLabel && (
-          <div className="flex-shrink-0 flex flex-col items-center px-6 py-3 rounded-xl bg-white border border-slate-300 shadow-sm">
+          <div className="flex-shrink-0 flex flex-col items-center px-6 py-3 rounded-xl bg-slate-900/80 border border-slate-700/60 shadow-sm">
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Severity</span>
             <span className={`text-3xl font-black ${cfg.textClass}`}>{overallSeverity}</span>
             <span className={`text-xs font-bold ${cfg.textClass}`}>{severityLabel}</span>
