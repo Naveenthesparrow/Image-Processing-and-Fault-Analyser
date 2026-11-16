@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import {
   Zap, RotateCcw, Download, AlertTriangle,
-  Info, ArrowLeft, ScanLine,
+  Info, ArrowLeft, ScanLine, Cpu,
 } from 'lucide-react';
 import { UploadZone } from './components/UploadZone';
 import { SummaryPanel } from './components/SummaryPanel';
@@ -9,6 +9,8 @@ import { ProgressSteps, type StepStatus } from './components/ProgressSteps';
 import { VerdictBanner } from './components/VerdictBanner';
 import { ImageViewer } from './components/ImageViewer';
 import { analyzeImage } from './ai/gemini';
+import { detectComponents } from './ai/detector';
+import type { Detection } from './ai/detectorTypes';
 import { buildReport, type Report, type ImageQualityInfo } from './logic/rules';
 import { validateImageFile, computeBlurScore, getImageDimensions } from './utils/image';
 import { labelOf } from './config/taxonomy';
@@ -16,7 +18,13 @@ import { MIN_IMAGE_SIDE } from './config/settings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type AppState = 'idle' | 'loading' | 'result' | 'error';
+// 'partial' = AI fault check failed (quota/server) but the on-device detector still found components
+type AppState = 'idle' | 'loading' | 'result' | 'partial' | 'error';
+
+type DetectStatus = 'idle' | 'running' | 'done' | 'failed';
+
+/** Gemini errors where showing on-device detections is still useful. */
+const PARTIAL_OK_ERRORS = new Set(['FREE_LIMIT_REACHED', 'ANALYSIS_FAILED', 'INVALID_API_KEY']);
 
 interface ProgressStep {
   label: string;
@@ -25,7 +33,7 @@ interface ProgressStep {
 
 const INITIAL_STEPS: ProgressStep[] = [
   { label: 'Checking image', status: 'pending' },
-  { label: 'Detecting type', status: 'pending' },
+  { label: 'Detecting components (on device)', status: 'pending' },
   { label: 'Analysing components', status: 'pending' },
   { label: 'Building report', status: 'pending' },
 ];
@@ -65,8 +73,11 @@ export default function App() {
   const [error, setError]               = useState<{ title: string; tip: string } | null>(null);
   const [geminiOutput, setGeminiOutput] = useState<any>(null);
   const [activeComponent, setActiveComponent] = useState<string | null>(null);
+  const [detections, setDetections]     = useState<Detection[]>([]);
+  const [detectStatus, setDetectStatus] = useState<DetectStatus>('idle');
 
   const fileRef = useRef<File | null>(null);
+  const runIdRef = useRef(0);
   const viewerRef = useRef<{ downloadImage: () => void }>(null);
 
   // ── Step helpers ─────────────────────────────────────────────────────────
@@ -83,9 +94,12 @@ export default function App() {
 
   const handleFile = useCallback(async (file: File) => {
     fileRef.current = file;
+    const runId = ++runIdRef.current;
     setAppState('loading');
     setError(null);
     setReport(null);
+    setDetections([]);
+    setActiveComponent(null);
     resetSteps();
 
     if (imageUrl) URL.revokeObjectURL(imageUrl);
@@ -110,19 +124,57 @@ export default function App() {
       };
       setStep(0, 'done');
 
-      // Step 1: Type detection
+      // Step 1: On-device component detection (free, runs in parallel with the AI call;
+      // it doesn't block the report — boxes appear in the viewer when ready)
       setStep(1, 'active');
+      setDetectStatus('running');
+      const detectPromise = detectComponents(file, (msg) => {
+        if (runIdRef.current !== runId) return;
+        setSteps((prev) => prev.map((s, i) => i === 1 && s.status === 'active' ? { ...s, label: msg } : s));
+      })
+        .then((found) => {
+          if (runIdRef.current !== runId) return found;
+          setDetections(found);
+          setDetectStatus('done');
+          setStep(1, 'done');
+          return found;
+        })
+        .catch((err) => {
+          console.warn('On-device detection failed:', err);
+          if (runIdRef.current === runId) {
+            setDetectStatus('failed');
+            setStep(1, 'error');
+          }
+          return [] as Detection[];
+        });
 
       // Step 2: Analysing
       setStep(2, 'active');
-      const result = await analyzeImage(file, 'rgb', false, (msg) => {
-        setSteps((prev) => {
-          const next = [...prev];
-          if (next[2].status === 'active') next[2] = { ...next[2], label: msg };
-          return next;
+      let result;
+      try {
+        result = await analyzeImage(file, 'rgb', false, (msg) => {
+          setSteps((prev) => {
+            const next = [...prev];
+            if (next[2].status === 'active') next[2] = { ...next[2], label: msg };
+            return next;
+          });
         });
-      });
-      setStep(1, 'done');
+      } catch (aiErr) {
+        // Fault check failed — if it's a quota/server issue, still show what the local detector found
+        const code = String(aiErr instanceof Error ? aiErr.message : aiErr);
+        if (PARTIAL_OK_ERRORS.has(code)) {
+          setStep(2, 'error');
+          const found = await detectPromise;
+          if (runIdRef.current !== runId) return;
+          if (found.length > 0) {
+            setError(ERROR_MESSAGES[code]);
+            setAppState('partial');
+            return;
+          }
+        }
+        throw aiErr;
+      }
+      if (runIdRef.current !== runId) return;
       setStep(2, 'done');
       setGeminiOutput(result.data);
 
@@ -136,6 +188,7 @@ export default function App() {
     } catch (err) {
       const code = String(err instanceof Error ? err.message : err);
       const errInfo = ERROR_MESSAGES[code] ?? ERROR_MESSAGES.ANALYSIS_FAILED;
+      if (runIdRef.current !== runId) return;
       setSteps((prev) => prev.map((s) => s.status === 'active' ? { ...s, status: 'error' } : s));
       setError(errInfo);
       setAppState('error');
@@ -156,7 +209,10 @@ export default function App() {
   }, [report, geminiOutput]);
 
   const resetApp = useCallback(() => {
+    runIdRef.current++;
     setAppState('idle');
+    setDetections([]);
+    setDetectStatus('idle');
     setReport(null);
     setError(null);
     setGeminiOutput(null);
@@ -287,6 +343,41 @@ export default function App() {
               </div>
             )}
 
+            {/* ── PARTIAL: fault check failed, on-device detection available ── */}
+            {appState === 'partial' && error && imageUrl && (
+              <div className="flex flex-col gap-6 animate-fadeIn">
+                <div
+                  role="alert"
+                  className="flex flex-col sm:flex-row sm:items-start gap-3 px-5 py-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800"
+                >
+                  <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="flex-1">
+                    <p className="font-bold">Fault check unavailable: {error.title}</p>
+                    <p className="mt-1 text-sm text-amber-700">
+                      Components were still identified on your device. Hover or click them to see what they are.
+                      Run the fault check again later for defects and severity.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => fileRef.current && handleFile(fileRef.current)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-800 font-semibold text-sm shrink-0 w-fit"
+                  >
+                    <RotateCcw size={14} aria-hidden="true" />
+                    Retry fault check
+                  </button>
+                </div>
+
+                <ImageViewer
+                  ref={viewerRef}
+                  imageUrl={imageUrl}
+                  components={[]}
+                  detections={detections}
+                  activeComponent={activeComponent}
+                  onSelectComponent={setActiveComponent}
+                />
+              </div>
+            )}
+
             {/* ── RESULT ── */}
             {appState === 'result' && report && (
               <div className="flex flex-col gap-6 animate-fadeIn">
@@ -320,8 +411,16 @@ export default function App() {
                         ref={viewerRef}
                         imageUrl={imageUrl}
                         components={report.components}
+                        detections={detections}
                         activeComponent={activeComponent}
+                        onSelectComponent={setActiveComponent}
                       />
+                      {detectStatus === 'running' && (
+                        <p className="mt-2 text-xs text-slate-500 flex items-center gap-1.5">
+                          <Cpu size={12} className="animate-pulse" aria-hidden="true" />
+                          Still locating components on your device — boxes will appear shortly…
+                        </p>
+                      )}
                     </div>
 
                     {/* Summary sidebar */}

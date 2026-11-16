@@ -1,8 +1,5 @@
-import {
-  GoogleGenAI,
-  type GenerateContentResponse,
-} from '@google/genai';
-import { GEMINI_API_KEY, GEMINI_MODEL, API_TIMEOUT_MS, MAX_IMAGE_SIDE, JPEG_QUALITY } from '../config/settings';
+import { GoogleGenAI } from '@google/genai';
+import { GEMINI_API_KEY, GEMINI_MODEL, GEMINI_PROXY_URL, API_TIMEOUT_MS, MAX_IMAGE_SIDE, JPEG_QUALITY } from '../config/settings';
 import { GEMINI_RESPONSE_SCHEMA, GeminiResponseSchema, type GeminiResponse } from './schema';
 import { buildPrompt, buildSecondPrompt } from './prompt';
 import { resizeImage, imageToBase64 } from '../utils/image';
@@ -18,15 +15,34 @@ export interface AnalyseResult {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildClient(): GoogleGenAI {
-  if (!GEMINI_API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY is not set. Add it to your .env file.');
+type GenerateRequest = Parameters<GoogleGenAI['models']['generateContent']>[0];
+
+/**
+ * Send one generateContent request.
+ * - Local dev / eval: VITE_GEMINI_API_KEY is set → call Gemini directly.
+ * - Deployed: no key in the browser → POST to our serverless proxy (api/gemini.ts),
+ *   which holds the key server-side. Errors keep the HTTP status in the message
+ *   so the 429/401/503 handling below works the same in both modes.
+ */
+async function generate(req: GenerateRequest, signal: AbortSignal): Promise<string> {
+  if (GEMINI_API_KEY) {
+    const client = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const response = await client.models.generateContent({ ...req, config: { ...req.config, abortSignal: signal } });
+    return response.text ?? '';
   }
-  return new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  const res = await fetch(GEMINI_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: req.contents, config: req.config }),
+    signal,
+  });
+  const body = await res.json().catch(() => ({})) as { text?: string; error?: string };
+  if (!res.ok) throw new Error(`${res.status} ${body.error ?? res.statusText}`);
+  return body.text ?? '';
 }
 
 async function callGemini(
-  client: GoogleGenAI,
   base64: string,
   mimeType: string,
   hint: ImageTypeHint,
@@ -43,9 +59,9 @@ async function callGemini(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-  let response: GenerateContentResponse;
+  let raw: string;
   try {
-    response = await client.models.generateContent({
+    raw = await generate({
       model,
       contents: [
         {
@@ -61,12 +77,10 @@ async function callGemini(
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA as never,
       },
-    });
+    }, controller.signal);
   } finally {
     clearTimeout(timer);
   }
-
-  const raw = response.text ?? '';
 
   // Parse and validate with Zod
   let parsed: unknown;
@@ -83,46 +97,6 @@ async function callGemini(
   return result.data;
 }
 
-async function preFlightCheck(
-  client: GoogleGenAI,
-  base64: string,
-  mimeType: string
-): Promise<boolean> {
-  const model = GEMINI_MODEL;
-  if (!model) throw new Error('VITE_GEMINI_MODEL is not set.');
-
-  try {
-    const response = await client.models.generateContent({
-      model,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: 'Look closely at this image. Is it a photograph of a power pole, transmission tower, electrical insulator, or closely related electrical grid infrastructure? Return true if it is, and false if it is a random irrelevant photo (e.g., a person, a cat, an indoor room, a car).' },
-            { inlineData: { mimeType, data: base64 } },
-          ],
-        },
-      ],
-      config: {
-        temperature: 0,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: { is_power_pole: { type: 'boolean' } },
-          required: ['is_power_pole'],
-        } as never,
-      },
-    });
-
-    const raw = response.text ?? '{}';
-    const parsed = JSON.parse(raw);
-    return parsed.is_power_pole === true;
-  } catch {
-    // If the fast check fails, default to true so we don't accidentally block a real image
-    return true;
-  }
-}
-
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export async function analyzeImage(
@@ -135,19 +109,13 @@ export async function analyzeImage(
   const resized = await resizeImage(file, MAX_IMAGE_SIDE, JPEG_QUALITY);
   const { base64, mimeType } = await imageToBase64(resized);
 
-  const client = buildClient();
-
-  onProgress?.('Verifying image contents…');
-  const isPole = await preFlightCheck(client, base64, mimeType);
-  if (!isPole) {
-    throw new Error('NOT_A_POLE');
-  }
-
+  // No separate "is this a pole?" call — the main response already carries
+  // is_power_pole / image_type, which saves one request per upload.
   onProgress?.('AI is analysing…');
 
   let data: GeminiResponse;
   try {
-    data = await callGemini(client, base64, mimeType, hint);
+    data = await callGemini(base64, mimeType, hint);
   } catch (firstErr) {
     const firstMsg = String(firstErr);
     if (firstMsg.includes('429') || firstMsg.includes('quota')) {
@@ -157,10 +125,14 @@ export async function analyzeImage(
       throw new Error('INVALID_API_KEY');
     }
 
-    // Retry once with error context
-    onProgress?.('Retrying after schema error…');
+    // Server overloaded (503) — wait before retrying instead of hammering it
+    const overloaded = firstMsg.includes('503') || firstMsg.includes('overloaded') || firstMsg.includes('UNAVAILABLE');
+    onProgress?.(overloaded ? 'AI server busy, retrying…' : 'Retrying after schema error…');
+    if (overloaded) await new Promise((r) => setTimeout(r, 3000));
+
+    // Retry once (with error context only for schema problems)
     try {
-      data = await callGemini(client, base64, mimeType, hint, firstMsg, false);
+      data = await callGemini(base64, mimeType, hint, overloaded ? undefined : firstMsg, false);
     } catch (secondErr) {
       // Translate API errors to friendly messages
       const msg = String(secondErr);
@@ -188,7 +160,7 @@ export async function analyzeImage(
   onProgress?.('Running double-check…');
   let data2: GeminiResponse;
   try {
-    data2 = await callGemini(client, base64, mimeType, hint, undefined, true);
+    data2 = await callGemini(base64, mimeType, hint, undefined, true);
   } catch {
     // If second call fails, just return first result
     return { data };

@@ -35,24 +35,41 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `VITE_GEMINI_API_KEY` | Your Google AI Studio API key |
-| `VITE_GEMINI_MODEL` | Model name (default: `gemini-2.5-flash`) |
+| Variable | Where | Description |
+|---|---|---|
+| `VITE_GEMINI_API_KEY` | `.env` (local dev only) | Google AI Studio key. When set, the browser calls Gemini directly. **Leave unset in deployed builds.** |
+| `VITE_GEMINI_MODEL` | `.env` | Model name for local dev (default: `gemini-2.5-flash`) |
+| `GEMINI_API_KEY` | Vercel → Environment Variables | Key used by the serverless proxy `api/gemini.ts` |
+| `GEMINI_MODEL` | Vercel → Environment Variables | Model used by the proxy (default: `gemini-2.5-flash`) |
 
 `.env` is in `.gitignore` and must never be committed.
 
 ---
 
-## ⚠️ Security Note
+## On-device component detection (free, no API)
 
-**The API key is bundled into the browser build — anyone who opens the site can extract it.**
+On upload, the app also runs **OWLv2** (Hugging Face `Xenova/owlv2-base-patch16-ensemble`) inside the browser
+via `transformers.js`, in a Web Worker. It locates poles, insulators, wires and trees so the user can
+**hover or click** any component on the image to see what it is — no API call, no rate limit.
 
-This is acceptable for a local demo / viva. To harden before any public deployment:
+- Runs in parallel with Gemini; boxes appear when ready and do not block the report.
+- If Gemini fails (quota / server busy), the app still shows the detected components ("partial" view).
+- Uses WebGPU (fp16, ~308 MB one-time download) when available, otherwise WASM (q8, ~155 MB, slower).
+  The model is cached by the browser after the first visit.
+- Prompts and thresholds: `src/ai/detectorTypes.ts`. Defects/severity still come only from Gemini + the rule engine.
 
-- Add a small backend proxy server. The only file to change is `src/ai/gemini.ts` (`analyzeImage` function).
-- Restrict the key's permissions in [Google AI Studio](https://aistudio.google.com/) or Google Cloud → restrict to specific HTTP referrers.
-- **Never deploy publicly with the raw key in the build.**
+---
+
+## Deploying (Vercel, free tier)
+
+1. Import the repo in Vercel and set **Root Directory** = `Frontend` (framework: Vite).
+2. Add `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) under Project → Settings → Environment Variables.
+   Do **not** add `VITE_GEMINI_API_KEY` there.
+3. Deploy. `vercel.json` configures the proxy function and the cross-origin-isolation headers
+   (needed for fast multi-threaded WASM in the detector).
+
+The key then stays on the server. Note the proxy itself has no auth or rate limiting, so anyone who finds
+the URL can still spend your quota through it — add a limit before sharing widely.
 
 ---
 

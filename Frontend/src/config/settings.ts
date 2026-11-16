@@ -96,5 +96,8 @@ export const API_TIMEOUT_MS = 60_000;
 
 // ── Read from environment ────────────────────────────────────────────────────
 
+/** Only for local dev/eval. Leave empty in deployed builds so the key never reaches the browser. */
 export const GEMINI_API_KEY = readEnv('VITE_GEMINI_API_KEY');
 export const GEMINI_MODEL   = readEnv('VITE_GEMINI_MODEL', 'gemini-2.5-flash');
+/** Serverless proxy used when no browser key is set (see api/gemini.ts). */
+export const GEMINI_PROXY_URL = readEnv('VITE_GEMINI_PROXY_URL', '/api/gemini');
